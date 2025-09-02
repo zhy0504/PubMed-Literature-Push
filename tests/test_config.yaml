@@ -1,0 +1,79 @@
+# 测试配置文件
+# 用于单元测试和集成测试
+
+# 基础配置
+test_config:
+  name: "PubMed Literature Push Test"
+  version: "1.0.0"
+  debug: true
+
+# SMTP配置测试
+smtp:
+  accounts:
+    - server: "smtp.gmail.com"
+      port: 587
+      username: "test@gmail.com"
+      password: "test_password_123"
+      sender_name: "Test Sender"
+    - server: "smtp.outlook.com"
+      port: 587
+      username: "test@outlook.com"
+      password: "test_password_456"
+      sender_name: "Test Sender 2"
+  base_interval_minutes: 5
+
+# LLM配置测试
+llm:
+  openai:
+    api_key: "sk-test-openai-key-123456"
+    model: "gpt-4"
+    temperature: 0.7
+    max_tokens: 2000
+  google:
+    api_key: "test-google-api-key-789012"
+    model: "gemini-pro"
+    temperature: 0.5
+    max_tokens: 2000
+
+# 用户组配置测试
+user_groups:
+  - group_name: "AI研究组"
+    emails:
+      - "researcher1@example.com"
+      - "researcher2@example.com"
+    keywords:
+      - "人工智能"
+      - "机器学习"
+      - "深度学习"
+      - "神经网络"
+  
+  - group_name: "医学信息组"
+    emails:
+      - "medical1@example.com"
+      - "medical2@example.com"
+      - "medical3@example.com"
+    keywords:
+      - "医学信息"
+      - "生物信息学"
+      - "临床研究"
+      - "药物发现"
+
+# 调度器配置测试
+scheduler:
+  run_time: "09:00"
+  delay_between_emails_sec: 60
+  delay_between_groups_sec: 300
+  max_retries: 3
+
+# 数据文件配置测试
+data_files:
+  zky_path: "test_data/zky.csv"
+  jcr_path: "test_data/jcr.csv"
+
+# 测试专用配置
+test_settings:
+  mock_external_services: true
+  use_test_database: true
+  log_level: "DEBUG"
+  cache_enabled: true
+  cache_ttl: 300

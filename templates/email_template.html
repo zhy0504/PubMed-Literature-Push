@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PubMed {{ date }} - {{ keyword }} 专题报告与综述</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { text-align: center; border-bottom: 2px solid #0056b3; padding-bottom: 15px; margin-bottom: 25px; }
+        .header h1 { color: #0056b3; }
+        .review-section { margin-bottom: 25px; padding: 15px; background-color: #eef4ff; border-left: 4px solid #0056b3; }
+        .review-section h2 { margin-top: 0; color: #003d82; }
+        .table-container { overflow-x: auto; }
+        .content-table { border-collapse: collapse; width: 100%; min-width: 800px; font-size: 14px; margin-top: 20px; }
+        .content-table th, .content-table td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+        .content-table th { background-color: #f2f2f2; font-weight: bold; }
+        .content-table .main-row:nth-child(4n-1), .content-table .main-row:nth-child(4n) { background-color: #f9f9f9; }
+        .abstract-row td { background-color: #fdfdfd; padding-left: 20px; }
+        a { color: #0056b3; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .footer { text-align: center; font-size: 0.8em; color: #777; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>PubMed 每日文献报告与综述</h1>
+            <p><strong>专题:</strong> {{ keyword }} | <strong>日期:</strong> {{ date }}</p>
+        </div>
+
+        <div class="review-section">
+            <h2>AI 生成综述</h2>
+            <div>{{ review_html|safe }}</div>
+        </div>
+
+        <h2>详细文献列表</h2>
+        {% if articles %}
+            <div class="table-container">
+                <table class="content-table">
+                    <thead>
+                        <tr>
+                            <th>序号</th>
+                            <th>标题</th>
+                            <th>期刊</th>
+                            <th>中科院分区</th>
+                            <th>JCR 分区</th>
+                            <th>影响因子</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for article in articles %}
+                        <tr class="main-row">
+                            <td>{{ article.citation_index }}</td>
+                            <td><a href="{{ article.link }}" target="_blank">{{ article.title }}</a></td>
+                            <td>{{ article.journal }}</td>
+                            <td>
+                                大类: {{ article.zky_data.get('大类分区', 'N/A') }}
+                                (Top: {{ article.zky_data.get('Top', '否') }})<br>
+                                小类: {{ article.zky_data.get('小类1分区', 'N/A') }}
+                            </td>
+                            <td>{{ article.jcr_data.get('IF Quartile', 'N/A') }}</td>
+                            <td>{{ article.jcr_data.get('IF', 'N/A') }}</td>
+                        </tr>
+                        <tr class="abstract-row">
+                            <td></td>
+                            <td colspan="5">
+                                <strong>摘要翻译:</strong><br>
+                                {{ article.translated_abstract }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>今日未发现与 "<strong>{{ keyword }}</strong>" 相关的新文献。</p>
+        {% endif %}
+
+        <div class="footer">
+            <p>由 PubMed Literature Push 自动生成</p>
+        </div>
+    </div>
+</body>
+</html>

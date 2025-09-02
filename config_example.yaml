@@ -1,0 +1,148 @@
+# PubMed Literature Push 配置文件样例
+# 这是最新版本的配置文件，支持用户组、多发件邮箱、LLM提供商等高级功能
+
+# === 重要说明：LLM提供商配置注意事项 ===
+#
+# 1. OpenAI提供商：
+#    - 支持官方API和自定义端点（通过base_url参数）
+#    - 自定义端点必须兼容OpenAI API格式
+#
+# 2. Gemini提供商：
+#    - 仅支持官方Google API，不支持自定义端点（Google官方库限制）
+#    - 如果需要通过代理访问，请使用环境变量HTTPS_PROXY或调用LLMService.configure_proxy()
+#
+# 3. 自定义提供商：
+#    - 必须提供api_endpoint，且端点必须支持OpenAI兼容格式
+#    - 对于Gemini模型的自定义端点，需要通过OpenAI兼容的代理服务访问
+#    - 系统会自动检测模型名称中包含"gemini"的情况，并给出相应警告
+#
+# === 配置示例 ===
+
+# 调度器设置
+scheduler:
+  run_time: '08:00'                     # 每日运行时间 (24小时格式)
+  delay_between_keywords_sec: 60        # 关键词任务间隔（秒）
+
+# PubMed 搜索设置
+pubmed:
+  max_articles: 50                      # 每个关键词最大文章数量
+
+# 代理设置（可选）
+# 如果需要通过代理访问API，可以在代码中调用 LLMService.configure_proxy("http://proxy:port")
+# 或者设置环境变量 HTTPS_PROXY 和 HTTP_PROXY
+# 注意: 对于Gemini API，代理是访问官方API的唯一方式
+
+# LLM 提供商配置
+llm_providers:
+  - name: openai                        # 提供商名称（用于任务映射）
+    provider: openai                    # 提供商类型: openai, gemini, custom
+    api_key: sk-your-openai-api-key     # API密钥
+    api_endpoint: ''                    # 自定义接入点（可选，openai支持自定义端点）
+  
+  - name: gemini                        # Gemini提供商示例
+    provider: gemini
+    api_key: your-gemini-api-key
+    api_endpoint: ''                    # 注意: Gemini不支持自定义端点，此字段将被忽略
+  
+  - name: custom_openai                 # 自定义OpenAI兼容端点示例
+    provider: custom
+    api_key: sk-custom-api-key
+    api_endpoint: https://your-custom-endpoint.com/v1  # 必须是OpenAI兼容格式
+  
+  - name: custom_gemini_proxy           # Gemini代理服务示例
+    provider: custom
+    api_key: sk-custom-api-key
+    api_endpoint: https://your-gemini-proxy.com/v1    # 必须是OpenAI兼容格式
+    # 注意: 由于Google官方库限制，连接Gemini需要通过OpenAI兼容的代理服务
+
+# 任务模型映射
+task_model_mapping:
+  query_generator:                      # 检索词生成器
+    provider_name: openai               # 使用的提供商名称（对应llm_providers中的name）
+    model_name: gpt-4o-mini            # 模型名称
+  
+  summarizer:                           # 综述生成器
+    provider_name: gemini              # 使用官方Gemini API
+    model_name: gemini-1.5-flash        # Gemini模型名称
+  
+  abstract_translator:                  # 摘要翻译器
+    provider_name: custom_openai        # 使用自定义OpenAI兼容端点
+    model_name: qwen2.5-72b-instruct    # 模型名称
+  
+  # 示例：使用Gemini代理服务
+  # alternative_summarizer:
+  #   provider_name: custom_gemini_proxy  # 使用Gemini代理服务
+  #   model_name: gemini-pro             # 模型名称
+
+# 翻译设置
+translation_settings:
+  batch_size: 20                        # 批处理大小
+  delay_between_batches_sec: 5          # 批次间隔（秒）
+
+# 提示词配置
+prompts:
+  generate_query: "You are an expert in biomedical literature retrieval. Your task is to convert a user's keyword into a highly effective, advanced PubMed search query to ensure maximum recall and precision. Follow these steps:\n\n1.  **Analyze and Translate**: Identify the core concepts in the user's keyword. If it's not in English, translate it into professional, academic English.\n\n2.  **Expand Concepts with MeSH and Synonyms**:\n    *   For each core concept, find the corresponding **MeSH Term** (e.g., for 'tuberculosis', the MeSH term is 'Tuberculosis').\n    *   Brainstorm and include common **synonyms, abbreviations, and variations** (e.g., 'TB', 'tubercle bacillus').\n    *   Combine these related terms using the `OR` operator.\n\n3.  **Construct the Query Structure**:\n    *   Create a concept group by enclosing the MeSH term and all its related synonyms in parentheses, like `(\"Tuberculosis\"[MeSH Terms] OR \"tuberculosis\"[Title/Abstract] OR \"TB\"[Title/Abstract])`.\n    *   If there are multiple distinct concepts in the user's keyword (e.g., 'tuberculosis in schools'), create a separate concept group for each and connect them with `AND`.\n\n4.  **Final Assembly**: \n    *   Combine your final, structured query for the topic with the provided date query using the `AND` operator.\n\n5.  **Output**: \n    *   Return **ONLY** the final, complete, and valid PubMed query string. \n    *   Do **NOT** include any explanations, comments, or markdown formatting.\n\n**User Keyword**: \"{keyword}\"\n**Date Query**: {date_query}"
+
+  generate_review: "你是一位专业的医学研究员。请根据下面提供的多篇关于 \"{keyword}\" 的文献摘要，撰写一段专业的、连贯的中文综述。\n\n综述要求：\n1.  整合所有文献的关键信息，而不是简单罗列。\n2.  在正文中引用信息来源时，请使用 `[文献编号]` 的格式，例如 `...的研究结果[1]`。\n3.  请**不要**在综述末尾生成任何形式的参考文献列表。只返回综述正文。\n\n文献列表如下:\n\n{articles_text}"
+
+  translate_abstract: "Translate the following English abstracts into fluent, professional, and academic Chinese.\n\nThe abstracts are separated by '|||---||'.\n\nPlease return the translated abstracts in the same order, also separated by '|||---||'.\n\nProvide only the translated texts, without any extra explanation or introductory phrases.\n\nEnglish Abstracts:\n\n{abstracts_batch}"
+
+# SMTP 邮件设置
+smtp:
+  max_retries: 3                        # 最大重试次数
+  retry_delay_sec: 300                  # 重试延迟（秒）
+  base_interval_minutes: 10             # 基础间隔（分钟）
+  admin_email: admin@example.com        # 管理员邮箱（接收系统报告）
+  
+  # 发件邮箱账号配置（支持多个邮箱轮替发送）
+  accounts:
+    - server: smtp.gmail.com            # SMTP服务器
+      port: 587                         # 端口
+      username: your-email@gmail.com    # 邮箱用户名
+      password: your-app-password       # 邮箱密码或应用专用密码
+      sender_name: PubMed Literature Push # 发件人名称
+    
+    - server: smtp.outlook.com          # 第二个邮箱示例
+      port: 587
+      username: your-email@outlook.com
+      password: your-password
+      sender_name: Medical Research Updates
+    
+    - server: smtp.qq.com               # 国内邮箱示例
+      port: 465
+      username: 1234567@qq.com
+      password: your-auth-code
+      sender_name: 医学文献推送
+
+# 用户组配置
+user_groups:
+  - group_name: 结核病研究团队             # 用户组名称
+    emails:                             # 组内用户邮箱列表
+      - researcher1@university.edu
+      - researcher2@hospital.org
+      - student@grad.school.edu
+    keywords:                           # 共享的关键词列表
+      - 结核病
+      - 肺结核
+      - 抗结核治疗
+  
+  - group_name: 心血管疾病科室
+    emails:
+      - doctor1@cardiology.com
+      - doctor2@cardiology.com
+      - nurse@cardiology.com
+    keywords:
+      - 冠心病
+      - 心肌梗死
+      - 心脏支架
+      - 高血压
+  
+  - group_name: 肿瘤研究组
+    emails:
+      - oncologist@cancer-center.org
+      - researcher@cancer-lab.edu
+    keywords:
+      - 肺癌
+      - 免疫治疗
+      - 靶向治疗
+      - CAR-T细胞
