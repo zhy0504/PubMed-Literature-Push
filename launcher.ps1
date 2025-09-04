@@ -374,7 +374,7 @@ function Test-Environment {
 
 # Enable auto-start on boot
 function Enable-AutoStart {
-    Write-Log "Configuring auto-start on boot..."
+    Write-Log "Configuring auto-start on boot with 10-minute delay..."
     
     $startupPath = [Environment]::GetFolderPath("Startup")
     $vbsFile = Join-Path $startupPath "PubMedLiteraturePush.vbs"
@@ -391,16 +391,17 @@ function Enable-AutoStart {
             Write-Log "Removed old batch file" "INFO"
         }
         
-        # Create VBScript file for completely hidden startup
+        # Create VBScript file for completely hidden startup with 10-minute delay
         $vbsContent = "Set WshShell = CreateObject(`"WScript.Shell`")`r`n"
+        $vbsContent += "WScript.Sleep 600000 ' Wait 10 minutes (600000 milliseconds)`r`n"
         $vbsContent += "WshShell.Run `"$pythonExe $mainProgramPath`", 0, False"
         
         # Create VBScript file
         Set-Content -Path $vbsFile -Value $vbsContent -Encoding ASCII
         
-        Write-Log "Auto-start configured successfully" "SUCCESS"
+        Write-Log "Auto-start configured successfully with 10-minute delay" "SUCCESS"
         Write-Log "VBScript file created at: $vbsFile" "INFO"
-        Write-Log "Using VBScript for completely hidden startup" "INFO"
+        Write-Log "Program will wait 10 minutes before starting after boot" "INFO"
         return $true
     } catch {
         Write-Log "Failed to configure auto-start: $($_.Exception.Message)" "ERROR"

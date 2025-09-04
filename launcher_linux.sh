@@ -222,16 +222,32 @@ check_environment() {
 
 # Enable auto-start on boot (Linux systemd)
 enable_autostart() {
-    log "INFO" "Configuring auto-start on boot..."
+    log "INFO" "Configuring auto-start on boot with 10-minute delay..."
     
     local service_file="$HOME/.config/systemd/user/pubmed-literature-push.service"
     local python_exe="$PROJECT_ROOT/.venv/bin/python"
     local main_program="$PROJECT_ROOT/main.py"
+    local startup_script="$PROJECT_ROOT/start_with_delay.sh"
     
     if [ ! -f "$main_program" ]; then
         log "ERROR" "Main program file does not exist"
         return 1
     fi
+    
+    # Create a startup script with delay
+    cat > "$startup_script" << EOF
+#!/bin/bash
+# PubMed Literature Push startup script with delay
+
+# Wait 10 minutes before starting the main program
+sleep 600
+
+# Start the main program
+exec "$python_exe" "$main_program"
+EOF
+    
+    # Make the startup script executable
+    chmod +x "$startup_script"
     
     # Create systemd user service directory
     mkdir -p "$HOME/.config/systemd/user"
@@ -244,7 +260,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=$python_exe $main_program
+ExecStart=$startup_script
 WorkingDirectory=$PROJECT_ROOT
 Restart=always
 RestartSec=10
@@ -262,9 +278,10 @@ EOF
     systemctl --user daemon-reload
     systemctl --user enable pubmed-literature-push.service
     
-    log "SUCCESS" "Auto-start configured successfully"
+    log "SUCCESS" "Auto-start configured successfully with 10-minute delay"
     log "INFO" "Systemd service created at: $service_file"
-    log "INFO" "Service will start automatically on next login"
+    log "INFO" "Service will wait 10 minutes before starting after boot"
+    log "INFO" "Startup script created at: $startup_script"
     return 0
 }
 
@@ -273,17 +290,25 @@ disable_autostart() {
     log "INFO" "Removing auto-start configuration..."
     
     local service_file="$HOME/.config/systemd/user/pubmed-literature-push.service"
+    local startup_script="$PROJECT_ROOT/start_with_delay.sh"
     
     if [ -f "$service_file" ]; then
         systemctl --user disable pubmed-literature-push.service
         systemctl --user stop pubmed-literature-push.service 2>/dev/null
         rm -f "$service_file"
         systemctl --user daemon-reload
-        log "SUCCESS" "Auto-start configuration removed successfully"
+        log "SUCCESS" "Systemd service removed"
     else
-        log "INFO" "Auto-start configuration does not exist"
+        log "INFO" "Systemd service does not exist"
     fi
     
+    # Remove startup script if exists
+    if [ -f "$startup_script" ]; then
+        rm -f "$startup_script"
+        log "SUCCESS" "Startup script removed"
+    fi
+    
+    log "SUCCESS" "Auto-start configuration removed successfully"
     return 0
 }
 
