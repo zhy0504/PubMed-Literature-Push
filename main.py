@@ -1,14 +1,16 @@
 import time
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from logging.handlers import TimedRotatingFileHandler
 import schedule
 import os
 import sys
 import signal
+import argparse
 from typing import Tuple
 from collections import defaultdict
+import json
 
 # 确保工作目录为脚本所在目录
 if getattr(sys, 'frozen', False):
@@ -159,10 +161,65 @@ def setup_logging():
     root_logger.addHandler(file_handler)
     root_logger.addHandler(stream_handler)
 
+def get_daily_run_marker_path():
+    """获取每日运行标记文件路径"""
+    return os.path.join(application_path, '.daily_run_marker.json')
+
+def has_run_today():
+    """检查今天是否已经运行过任务"""
+    marker_path = get_daily_run_marker_path()
+    if not os.path.exists(marker_path):
+        return False
+    
+    try:
+        with open(marker_path, 'r', encoding='utf-8') as f:
+            marker_data = json.load(f)
+        
+        last_run_date = datetime.strptime(marker_data['last_run_date'], '%Y-%m-%d').date()
+        today = date.today()
+        
+        return last_run_date == today
+    except (json.JSONDecodeError, KeyError, ValueError, OSError):
+        # 如果标记文件损坏，返回False并将在下次运行时重新创建
+        return False
+
+def mark_today_as_run():
+    """标记今天已经运行过任务"""
+    marker_path = get_daily_run_marker_path()
+    marker_data = {
+        'last_run_date': date.today().isoformat(),
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    try:
+        with open(marker_path, 'w', encoding='utf-8') as f:
+            json.dump(marker_data, f, ensure_ascii=False, indent=2)
+        logging.info(f"已标记今日任务已执行: {marker_data['last_run_date']}")
+    except OSError as e:
+        logging.error(f"无法创建每日运行标记文件: {e}")
+
+def clear_daily_run_marker():
+    """清除每日运行标记，允许重新运行今日任务"""
+    marker_path = get_daily_run_marker_path()
+    
+    if os.path.exists(marker_path):
+        try:
+            os.remove(marker_path)
+            logging.info("已清除每日运行标记，今日任务可以重新执行。")
+        except OSError as e:
+            logging.error(f"无法清除每日运行标记文件: {e}")
+    else:
+        logging.info("没有找到每日运行标记文件。")
+
 def run_job():
     """
     执行一次完整的任务：搜索、增强、翻译、生成报告并发送邮件。
     """
+    # 检查今天是否已经运行过
+    if has_run_today():
+        logging.info("今日任务已经执行过，跳过本次执行。")
+        return
+    
     logging.info("开始执行每日任务...")
     start_time = datetime.now()
     job_stats = []
@@ -239,6 +296,10 @@ def run_job():
     finally:
         end_time = datetime.now()
         duration = end_time - start_time
+        
+        # 如果任务成功完成，标记今天已运行
+        if not error_occurred:
+            mark_today_as_run()
         
         if config:
             admin_email = config.get('smtp', {}).get('admin_email')
@@ -346,11 +407,29 @@ def process_review_and_sort_articles(review_text: str, original_articles: list) 
             article['citation_index'] = i + 1
         return body, original_articles
 
+def parse_arguments():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description='PubMed Literature Push - 每日文献推送系统')
+    parser.add_argument('--clear-marker', action='store_true', 
+                       help='清除每日运行标记，允许重新运行今日任务')
+    parser.add_argument('--force-run', action='store_true',
+                       help='强制立即运行任务，忽略标记和时间检查')
+    return parser.parse_args()
+
 if __name__ == "__main__":
+    # 解析命令行参数
+    args = parse_arguments()
+    
     setup_logging()
     
     # 初始化跨平台进程处理器
     process_handler = CrossPlatformProcessHandler()
+    
+    # 处理命令行参数
+    if args.clear_marker:
+        logging.info("收到清除每日运行标记的指令...")
+        clear_daily_run_marker()
+        sys.exit(0)
     
     logging.info("程序已启动。正在检查执行时间...")
     
@@ -370,13 +449,23 @@ if __name__ == "__main__":
         logging.info(f"当前时间：{current_time_str}")
         logging.info(f"设定执行时间：{run_time}")
         
-        # 判断是否需要立即执行
-        if current_time > scheduled_time:
-            logging.info("当前时间已超过今日设定执行时间，立即执行一次任务...")
+        # 处理强制运行选项
+        if args.force_run:
+            logging.info("收到强制运行指令，立即执行任务...")
             run_job()
-            logging.info("立即执行完成。")
+            logging.info("强制运行完成。")
         else:
-            logging.info("当前时间早于设定执行时间，等待定时执行。")
+            # 判断是否需要立即执行
+            if current_time > scheduled_time:
+                # 检查今天是否已经运行过任务
+                if has_run_today():
+                    logging.info("当前时间已超过今日设定执行时间，但今日任务已执行过，跳过立即执行。")
+                else:
+                    logging.info("当前时间已超过今日设定执行时间，立即执行一次任务...")
+                    run_job()
+                    logging.info("立即执行完成。")
+            else:
+                logging.info("当前时间早于设定执行时间，等待定时执行。")
         
         # 设置定时任务
         logging.info(f"任务计划在每天 {run_time} 执行。")
