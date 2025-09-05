@@ -174,9 +174,9 @@ class PubMedProcessor:
             logging.error("PubMed 搜索出错:", exc_info=True)
             return []
 
-    def generate_review(self, articles: List[Dict[str, Any]], keyword: str) -> str:
+    def generate_review(self, articles: List[Dict[str, Any]], keyword: str) -> tuple[str, List[int]]:
         if not articles:
-            return "没有可供综述的文章。"
+            return "没有可供综述的文章。", []
 
         logging.info(f"准备为 {len(articles)} 篇文章生成综述")
         articles_text = ""
@@ -196,9 +196,15 @@ class PubMedProcessor:
         logging.info("正在生成综述 (流式)...")
         review = self.summarizer.generate(prompt, stream=True)
         
-        # 分析综述中的引用情况
+        # 分析综述中的引用情况（支持[1]和[1,2,3]格式）
         import re
-        citations_in_review = [int(c) for c in re.findall(r'\[(\d+)\]', review)]
+        # 先找到所有引用标记，然后解析其中的数字
+        citation_matches = re.findall(r'\[(\d+(?:\s*,\s*\d+)*)\]', review)
+        citations_in_review = []
+        for match in citation_matches:
+            # 分割每个引用标记中的数字
+            numbers = [int(n.strip()) for n in match.split(',')]
+            citations_in_review.extend(numbers)
         logging.info(f"LLM生成的综述中包含的引用: {citations_in_review}")
         
         # 检查是否有文章未被引用
@@ -213,7 +219,7 @@ class PubMedProcessor:
                 if idx <= len(articles):
                     logging.warning(f"未引用文章 [{idx}]: PMID {articles[idx-1].get('pmid', 'N/A')} - {articles[idx-1].get('title', 'N/A')[:50]}...")
         
-        return review
+        return review, citations_in_review
 
     def translate_abstracts_in_batch(self, articles: List[Dict[str, Any]]):
         translation_config = self.config.get('translation_settings', {})
